@@ -8,6 +8,9 @@ use storage::{
     set_balance, set_total_supply, total_supply,
 };
 
+/// Maximum total token supply (1 billion tokens with 7 decimal places = 10^16 stroops).
+pub const MAX_SUPPLY: i128 = 10_000_000_000_000_0000;
+
 #[contract]
 pub struct TokenContract;
 
@@ -116,8 +119,10 @@ impl TokenContract {
         admin.require_auth();
         assert_eq!(get_admin(&env), admin, "not admin");
         assert!(amount > 0, "amount must be positive");
+        let new_supply = total_supply(&env).checked_add(amount).expect("supply overflow");
+        assert!(new_supply <= MAX_SUPPLY, "E010: mint would exceed MAX_SUPPLY");
         set_balance(&env, &to, balance_of(&env, &to) + amount);
-        set_total_supply(&env, total_supply(&env) + amount);
+        set_total_supply(&env, new_supply);
     }
 
     /// Burn `amount` tokens from `from`'s own balance, reducing total supply.

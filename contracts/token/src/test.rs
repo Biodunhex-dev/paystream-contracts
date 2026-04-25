@@ -2,6 +2,8 @@
 
 #![cfg(test)]
 
+use crate::MAX_SUPPLY;
+
 fn setup() -> (Env, TokenContractClient<'static>) {
     let env = Env::default();
     env.mock_all_auths();
@@ -90,4 +92,41 @@ fn test_transfer_overdraft() {
     let user = Address::generate(&env);
     client.initialize(&admin, &100);
     client.transfer(&admin, &user, &999);
+}
+
+// ---------------------------------------------------------------------------
+// Issue #68 – MAX_SUPPLY cap
+// ---------------------------------------------------------------------------
+
+/// Minting exactly to MAX_SUPPLY must succeed.
+#[test]
+fn test_mint_to_cap_succeeds() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &0);
+    // Mint the full cap in one call.
+    client.mint(&admin, &admin, &MAX_SUPPLY);
+    assert_eq!(client.total_supply(), MAX_SUPPLY);
+}
+
+/// Minting one token beyond MAX_SUPPLY must be rejected with E010.
+#[test]
+#[should_panic(expected = "E010")]
+fn test_mint_beyond_cap_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &0);
+    client.mint(&admin, &admin, &MAX_SUPPLY);
+    // One more token must panic.
+    client.mint(&admin, &admin, &1);
+}
+
+/// initialize with initial_supply == MAX_SUPPLY is valid; subsequent mint fails.
+#[test]
+#[should_panic(expected = "E010")]
+fn test_initialize_at_cap_then_mint_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &MAX_SUPPLY);
+    client.mint(&admin, &admin, &1);
 }
