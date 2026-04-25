@@ -36,6 +36,8 @@ pub struct Stream {
     /// contract.  If a future upgrade introduces a callback hook the guard
     /// will catch it.
     pub locked: bool,
+    /// Minimum seconds between successive withdrawals (0 = no cooldown).
+    pub cooldown_period: u64,
 }
 
 /// Parameters for a single stream in a batch create call.
@@ -47,6 +49,8 @@ pub struct StreamParams {
     pub deposit: i128,
     pub rate_per_second: i128,
     pub stop_time: u64,
+    /// Minimum seconds between successive withdrawals (0 = no cooldown).
+    pub cooldown_period: u64,
 }
 
 /// Storage keys.
@@ -65,7 +69,7 @@ pub enum DataKey {
     EmployerStreams(Address),
     /// Index: employee address → Vec<u64> of stream IDs paying them.
     EmployeeStreams(Address),
-    MinDeposit,
+    PendingAdmin,
 }
 
 /// Contract error codes – panic messages reference these names so callers can
@@ -86,3 +90,4 @@ pub const ERR_STREAM_EXHAUSTED: &str = "E006: cannot top up an exhausted stream"
 pub const ERR_BELOW_MIN_DEPOSIT: &str = "E007: deposit below minimum";
 pub const ERR_INVALID_RATE: &str = "E008: rate_per_second exceeds maximum";
 pub const ERR_BAD_NONCE: &str = "E009: invalid admin nonce";
+pub const ERR_COOLDOWN: &str = "E011: cooldown period has not elapsed since last withdrawal";

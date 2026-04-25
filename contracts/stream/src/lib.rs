@@ -18,7 +18,7 @@ use storage::{
 };
 use types::{
     DataKey, Stream, StreamParams, StreamStatus, ERR_REENTRANT, ERR_STREAM_CANCELLED,
-    ERR_STREAM_EXHAUSTED, ERR_ZERO_DEPOSIT, ERR_ZERO_RATE,
+    ERR_STREAM_EXHAUSTED, ERR_ZERO_DEPOSIT, ERR_ZERO_RATE, ERR_COOLDOWN,
 };
 use validate::{validate_create_stream, validate_top_up};
 
@@ -176,6 +176,7 @@ impl StreamContract {
         deposit: i128,
         rate_per_second: i128,
         stop_time: u64,
+        cooldown_period: u64,
     ) -> u64 {
         employer.require_auth();
         assert!(!get_paused(&env), "contract is paused");
@@ -202,6 +203,7 @@ impl StreamContract {
             last_withdraw_time: now,
             status: StreamStatus::Active,
             locked: false,
+            cooldown_period,
         };
         save_stream(&env, &stream);
         index_employer_stream(&env, &employer, id);
@@ -261,6 +263,7 @@ impl StreamContract {
                 last_withdraw_time: now,
                 status: StreamStatus::Active,
                 locked: false,
+                cooldown_period: p.cooldown_period,
             };
             save_stream(&env, &stream);
             index_employer_stream(&env, &employer, id);
@@ -302,6 +305,16 @@ impl StreamContract {
         );
 
         let now = env.ledger().timestamp();
+
+        // Cooldown enforcement: reject if not enough time has passed since last withdrawal.
+        if stream.cooldown_period > 0 {
+            assert!(
+                now >= stream.last_withdraw_time + stream.cooldown_period,
+                "{}",
+                ERR_COOLDOWN
+            );
+        }
+
         let amount = claimable_amount(&stream, now);
         if amount == 0 {
             return 0;
