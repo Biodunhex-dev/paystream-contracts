@@ -9,6 +9,14 @@ PayStream lets employers stream salaries to employees in real-time, per-second. 
 
 ---
 
+## Demo
+
+> 📹 **[Watch the demo on YouTube](https://www.youtube.com/watch?v=TODO_REPLACE_WITH_REAL_LINK)** — shows the full `create_stream → withdraw` flow on Stellar testnet.
+>
+> *(Replace the link above with the real video URL once recorded and uploaded.)*
+
+---
+
 ## Why PayStream?
 
 - **Real-time pay** — employees access earned wages any time, not just payday
