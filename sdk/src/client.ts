@@ -3,7 +3,7 @@
 import {
   Contract,
   Networks,
-  SorobanRpc,
+  rpc,
   Transaction,
   TransactionBuilder,
   BASE_FEE,
@@ -29,13 +29,13 @@ const TIMEOUT_SECONDS = 30;
  * submitTransaction.
  */
 export class PayStreamClient {
-  private readonly rpc: SorobanRpc.Server;
+  private readonly rpc: rpc.Server;
   private readonly contract: Contract;
   private readonly networkPassphrase: string;
   private readonly contractId: string;
 
   constructor(opts: PayStreamClientOptions) {
-    this.rpc = new SorobanRpc.Server(opts.rpcUrl, { allowHttp: true });
+    this.rpc = new rpc.Server(opts.rpcUrl, { allowHttp: true });
     this.contract = new Contract(opts.contractId);
     this.networkPassphrase = opts.networkPassphrase;
     this.contractId = opts.contractId;
@@ -59,10 +59,10 @@ export class PayStreamClient {
       .build();
 
     const simResult = await this.rpc.simulateTransaction(tx);
-    if (SorobanRpc.Api.isSimulationError(simResult)) {
+    if (rpc.Api.isSimulationError(simResult)) {
       throw new Error(`Simulation failed: ${simResult.error}`);
     }
-    const prepared = SorobanRpc.assembleTransaction(
+    const prepared = rpc.assembleTransaction(
       tx,
       simResult
     ).build();
@@ -87,10 +87,10 @@ export class PayStreamClient {
       .build();
 
     const simResult = await this.rpc.simulateTransaction(tx);
-    if (SorobanRpc.Api.isSimulationError(simResult)) {
+    if (rpc.Api.isSimulationError(simResult)) {
       throw new Error(`Simulation failed: ${simResult.error}`);
     }
-    const success = simResult as SorobanRpc.Api.SimulateTransactionSuccessResponse;
+    const success = simResult as rpc.Api.SimulateTransactionSuccessResponse;
     if (!success.result) throw new Error("No result from simulation");
     return success.result.retval;
   }
@@ -113,10 +113,10 @@ export class PayStreamClient {
     for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 1500));
       const status = await this.rpc.getTransaction(hash);
-      if (status.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
+      if (status.status === rpc.Api.GetTransactionStatus.SUCCESS) {
         return hash;
       }
-      if (status.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
+      if (status.status === rpc.Api.GetTransactionStatus.FAILED) {
         throw new Error(`Transaction failed: ${hash}`);
       }
     }

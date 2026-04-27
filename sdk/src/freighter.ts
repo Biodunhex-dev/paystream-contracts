@@ -23,7 +23,8 @@ export class FreighterNotInstalledError extends Error {
   }
 }
 
-function getFreighterApi(): typeof import("@freighter-api/freighter-api") {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getFreighterApi(): any {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = globalThis as any;
   if (!w.freighterApi) {
