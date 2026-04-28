@@ -148,3 +148,19 @@ All expected error messages match the actual contract error strings:
 - [x] Organized into logical sections
 - [x] Clear documentation and comments
 - [x] Module properly integrated into `lib.rs`
+
+## Related Documentation
+
+- **Access Control Module**: See `ACCESS_CONTROL.md` for the centralized authorization module
+- **Quick Reference**: See `ACCESS_CONTROL_QUICK_REFERENCE.md` for common patterns
+- **Refactoring Summary**: See `REFACTORING_SUMMARY.md` for details on the centralization effort
+
+## Access Control Integration
+
+All authorization checks in the contract now use the centralized `access_control` module:
+
+- **Admin checks**: `require_admin()`, `require_pending_admin()`
+- **Employer checks**: `require_employer()`, `require_employer_by_id()`, `require_pending_employer()`
+- **Employee checks**: `require_employee()`, `require_employee_by_id()`
+
+This ensures consistent authorization logic across all 38 test cases and the main contract implementation.

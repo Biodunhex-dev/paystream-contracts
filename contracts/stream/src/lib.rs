@@ -2,6 +2,7 @@
 
 #![no_std]
 
+mod access_control;
 mod events;
 mod storage;
 mod types;
@@ -14,6 +15,10 @@ mod test;
 mod auth_tests;
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
+use access_control::{
+    require_admin, require_employee, require_employee_by_id, require_employer,
+    require_employer_by_id, require_pending_admin, require_pending_employer,
+};
 use storage::{
     add_pause_event, apply_proposal, claimable_amount, clear_pending_admin, clear_pending_employer,
     consume_admin_nonce, get_admin, get_admin_nonce, get_employee_streams, get_employer_streams,
@@ -71,31 +76,30 @@ impl StreamContract {
         set_admin(&env, &admin);
     }
 
-    pub fn propose_admin(env: Env, new_admin: Address) {
-        let current = get_admin(&env);
-        current.require_auth();
+    pub fn propose_admin(env: Env, current_admin: Address, new_admin: Address) {
+        current_admin.require_auth();
+        require_admin(&env, &current_admin);
         set_pending_admin(&env, &new_admin);
     }
 
     pub fn accept_admin(env: Env, new_admin: Address) {
         new_admin.require_auth();
-        let pending = get_pending_admin(&env).expect("no pending admin");
-        assert_eq!(pending, new_admin, "not the pending admin");
+        require_pending_admin(&env, &new_admin);
         set_admin(&env, &new_admin);
         clear_pending_admin(&env);
     }
 
-    pub fn pause_contract(env: Env, nonce: u64) {
-        let admin = get_admin(&env);
+    pub fn pause_contract(env: Env, admin: Address, nonce: u64) {
         admin.require_auth();
+        require_admin(&env, &admin);
         consume_admin_nonce(&env, nonce);
         set_paused(&env, true);
         events::contract_paused(&env, true);
     }
 
-    pub fn unpause_contract(env: Env, nonce: u64) {
-        let admin = get_admin(&env);
+    pub fn unpause_contract(env: Env, admin: Address, nonce: u64) {
         admin.require_auth();
+        require_admin(&env, &admin);
         consume_admin_nonce(&env, nonce);
         set_paused(&env, false);
         events::contract_paused(&env, false);
@@ -103,8 +107,7 @@ impl StreamContract {
 
     pub fn set_min_deposit(env: Env, admin: Address, nonce: u64, amount: i128) {
         admin.require_auth();
-        let stored_admin = get_admin(&env);
-        assert_eq!(admin, stored_admin, "not the admin");
+        require_admin(&env, &admin);
         consume_admin_nonce(&env, nonce);
         assert!(amount > 0, "{}", ERR_ZERO_DEPOSIT);
         set_min_deposit(&env, amount);
@@ -112,8 +115,7 @@ impl StreamContract {
 
     pub fn set_protocol_fee(env: Env, admin: Address, nonce: u64, fee_bps: u32, fee_recipient: Address) {
         admin.require_auth();
-        let stored_admin = get_admin(&env);
-        assert_eq!(admin, stored_admin, "not the admin");
+        require_admin(&env, &admin);
         consume_admin_nonce(&env, nonce);
         assert!(fee_bps <= 100, "{}", ERR_FEE_TOO_HIGH);
         set_fee_bps(&env, fee_bps);
@@ -122,8 +124,7 @@ impl StreamContract {
 
     pub fn set_max_streams_per_employer(env: Env, admin: Address, nonce: u64, limit: u32) {
         admin.require_auth();
-        let stored_admin = get_admin(&env);
-        assert_eq!(admin, stored_admin, "not the admin");
+        require_admin(&env, &admin);
         consume_admin_nonce(&env, nonce);
         set_max_streams_per_employer(&env, limit);
     }
@@ -232,8 +233,7 @@ impl StreamContract {
     pub fn withdraw(env: Env, employee: Address, stream_id: u64) -> i128 {
         employee.require_auth();
         assert!(!get_paused(&env), "contract is paused");
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employee, employee, "not the employee");
+        let mut stream = require_employee_by_id(&env, &employee, stream_id);
         assert!(
             stream.status == StreamStatus::Active || stream.status == StreamStatus::Exhausted,
             "stream not active"
@@ -286,8 +286,7 @@ impl StreamContract {
     pub fn top_up(env: Env, employer: Address, stream_id: u64, amount: i128) {
         employer.require_auth();
         validate_top_up(amount);
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
+        let mut stream = require_employer_by_id(&env, &employer, stream_id);
         assert!(stream.status != StreamStatus::Cancelled, "{}", ERR_STREAM_CANCELLED);
         assert!(stream.status != StreamStatus::Exhausted, "{}", ERR_STREAM_EXHAUSTED);
 
@@ -300,8 +299,7 @@ impl StreamContract {
 
     pub fn pause_stream(env: Env, employer: Address, stream_id: u64) {
         employer.require_auth();
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
+        let mut stream = require_employer_by_id(&env, &employer, stream_id);
         assert_eq!(stream.status, StreamStatus::Active, "stream not active");
         let now = env.ledger().timestamp();
         stream.paused_at = now;
@@ -313,8 +311,7 @@ impl StreamContract {
 
     pub fn resume_stream(env: Env, employer: Address, stream_id: u64) {
         employer.require_auth();
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
+        let mut stream = require_employer_by_id(&env, &employer, stream_id);
         assert_eq!(stream.status, StreamStatus::Paused, "stream not paused");
         let now = env.ledger().timestamp();
         // Advance last_withdraw_time by the paused duration to exclude it while
@@ -330,8 +327,7 @@ impl StreamContract {
 
     pub fn cancel_stream(env: Env, employer: Address, stream_id: u64) {
         employer.require_auth();
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
+        let mut stream = require_employer_by_id(&env, &employer, stream_id);
         assert!(
             stream.status == StreamStatus::Active || stream.status == StreamStatus::Paused,
             "stream already ended"
@@ -358,16 +354,14 @@ impl StreamContract {
 
     pub fn propose_employer_transfer(env: Env, employer: Address, stream_id: u64, new_employer: Address) {
         employer.require_auth();
-        let stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
+        let stream = require_employer_by_id(&env, &employer, stream_id);
         set_pending_employer(&env, stream_id, &new_employer);
         events::employer_transfer_proposed(&env, stream_id, &employer, &new_employer);
     }
 
     pub fn accept_employer_transfer(env: Env, new_employer: Address, stream_id: u64) {
         new_employer.require_auth();
-        let pending = get_pending_employer(&env, stream_id).expect("no pending employer transfer");
-        assert_eq!(pending, new_employer, "{}", ERR_UNAUTHORIZED_TRANSFER);
+        require_pending_employer(&env, &new_employer, stream_id);
         let mut stream = load_stream(&env, stream_id).expect("stream not found");
         let old_employer = stream.employer.clone();
         stream.employer = new_employer.clone();
@@ -384,8 +378,7 @@ impl StreamContract {
         assert!(new_rate > 0, "{}", ERR_ZERO_RATE);
         assert!(new_rate <= MAX_RATE_PER_SECOND, "{}", types::ERR_INVALID_RATE);
 
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
+        let mut stream = require_employer_by_id(&env, &employer, stream_id);
         assert_eq!(stream.status, StreamStatus::Active, "stream not active");
 
         let now = env.ledger().timestamp();
@@ -413,17 +406,16 @@ impl StreamContract {
         claimable_amount(&stream, timestamp)
     }
 
-    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>, nonce: u64) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).expect("admin not set");
+    pub fn upgrade(env: Env, admin: Address, new_wasm_hash: BytesN<32>, nonce: u64) {
         admin.require_auth();
+        require_admin(&env, &admin);
         consume_admin_nonce(&env, nonce);
         env.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 
     pub fn migrate(env: Env, admin: Address) {
         admin.require_auth();
-        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).expect("admin not set");
-        assert_eq!(admin, stored_admin, "not the admin");
+        require_admin(&env, &admin);
     }
 
     pub fn stream_count(env: Env) -> u64 {
