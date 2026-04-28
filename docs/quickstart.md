@@ -207,6 +207,37 @@ stellar contract invoke \
 
 ---
 
+## 13. Transfer stream ownership (two-step)
+
+To hand a stream to a new employer without risking an accidental transfer, use the propose → accept pattern:
+
+```bash
+NEW_EMPLOYER=$(stellar keys address new_employer)  # generate with: stellar keys generate new_employer --network local
+
+# Step 1: current employer proposes the transfer
+stellar contract invoke \
+  --id "$STREAM_ID" \
+  --source employer \
+  --network local \
+  -- propose_employer_transfer \
+  --employer "$EMPLOYER" \
+  --stream_id "$STREAM_ID_NUM" \
+  --new_employer "$NEW_EMPLOYER"
+
+# Step 2: new employer accepts
+stellar contract invoke \
+  --id "$STREAM_ID" \
+  --source new_employer \
+  --network local \
+  -- accept_employer_transfer \
+  --new_employer "$NEW_EMPLOYER" \
+  --stream_id "$STREAM_ID_NUM"
+```
+
+After step 2 the new employer owns the stream; the old employer loses all control.
+
+---
+
 ## Docker alternative (no local Rust/Stellar CLI required)
 
 If you prefer not to install Rust or the Stellar CLI locally:
