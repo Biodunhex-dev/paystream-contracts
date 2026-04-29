@@ -134,5 +134,6 @@ pub const ERR_FEE_TOO_HIGH: &str = "E011: fee_bps exceeds maximum of 100";
 pub const ERR_INVALID_TOKEN: &str = "E012: token address is not a valid SEP-41 contract";
 pub const ERR_UNAUTHORIZED_TRANSFER: &str = "E013: not the pending employer for this stream";
 pub const ERR_DURATION_TOO_LONG: &str = "E014: stream duration exceeds maximum allowed";
+pub const ERR_STOP_TIME_PAST: &str = "E016: stop_time must be in the future";
 pub const ERR_MAX_STREAMS_REACHED: &str = "E015: maximum streams per employer reached";
 pub const ERR_WITHDRAW_COOLDOWN: &str = "E010: withdraw cooldown not expired";

@@ -968,6 +968,43 @@ fn test_create_stream_exceeds_max_duration_effective_rejected() {
     client.create_stream(&employer, &employee, &token_id, &((max_duration + 1) as i128), &1, &0, &0, &0);
 }
 
+/// Issue #5: stop_time in the past must be rejected at stream creation.
+#[test]
+#[should_panic(expected = "E016")]
+fn test_create_stream_stop_time_in_past_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    // Advance ledger so "now" is non-zero, then pass a stop_time in the past.
+    env.ledger().with_mut(|l| l.timestamp = 1_000);
+    let past = 500u64; // clearly before now
+    client.create_stream(&employer, &employee, &token_id, &3600, &1, &past, &0, &0);
+}
+
+/// Issue #5: stop_time equal to current ledger time must also be rejected.
+#[test]
+#[should_panic(expected = "E016")]
+fn test_create_stream_stop_time_equal_now_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    env.ledger().with_mut(|l| l.timestamp = 1_000);
+    let now = env.ledger().timestamp();
+    client.create_stream(&employer, &employee, &token_id, &3600, &1, &now, &0, &0);
+}
+
 #[test]
 fn test_cancel_after_partial_withdraw() {
     let (env, client) = setup();
