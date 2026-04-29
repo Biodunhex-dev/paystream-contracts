@@ -161,6 +161,37 @@ fn test_pause_and_resume() {
 }
 
 #[test]
+#[should_panic(expected = "E016")]
+fn test_double_pause_returns_error() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0, &0, &0);
+    client.pause_stream(&employer, &id);
+    client.pause_stream(&employer, &id); // should panic with E016
+}
+
+#[test]
+#[should_panic(expected = "E017")]
+fn test_double_resume_returns_error() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0, &0, &0);
+    client.pause_stream(&employer, &id);
+    client.resume_stream(&employer, &id);
+    client.resume_stream(&employer, &id); // should panic with E017
+}
+
+#[test]
 fn test_cancel_stream_refunds_employer() {
     let (env, client) = setup();
     let admin = Address::generate(&env);

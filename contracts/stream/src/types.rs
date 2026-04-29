@@ -136,3 +136,5 @@ pub const ERR_UNAUTHORIZED_TRANSFER: &str = "E013: not the pending employer for 
 pub const ERR_DURATION_TOO_LONG: &str = "E014: stream duration exceeds maximum allowed";
 pub const ERR_MAX_STREAMS_REACHED: &str = "E015: maximum streams per employer reached";
 pub const ERR_WITHDRAW_COOLDOWN: &str = "E010: withdraw cooldown not expired";
+pub const ERR_ALREADY_PAUSED: &str = "E016: stream is already paused";
+pub const ERR_NOT_PAUSED: &str = "E017: stream is not paused";

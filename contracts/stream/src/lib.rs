@@ -31,9 +31,9 @@ use storage::{
 };
 use types::{
     DataKey, GovParam, PauseEvent, Proposal, ProposalStatus, Stream, StreamParams, StreamStatus,
-    ERR_FEE_TOO_HIGH, ERR_INVALID_TOKEN, ERR_OVERFLOW, ERR_REENTRANT, ERR_STREAM_CANCELLED,
-    ERR_STREAM_EXHAUSTED, ERR_UNAUTHORIZED_TRANSFER, ERR_WITHDRAW_COOLDOWN, ERR_ZERO_DEPOSIT,
-    ERR_ZERO_RATE,
+    ERR_ALREADY_PAUSED, ERR_FEE_TOO_HIGH, ERR_INVALID_TOKEN, ERR_NOT_PAUSED, ERR_OVERFLOW,
+    ERR_REENTRANT, ERR_STREAM_CANCELLED, ERR_STREAM_EXHAUSTED, ERR_UNAUTHORIZED_TRANSFER,
+    ERR_WITHDRAW_COOLDOWN, ERR_ZERO_DEPOSIT, ERR_ZERO_RATE,
 };
 use validate::{validate_create_stream, validate_max_streams, validate_top_up, MAX_RATE_PER_SECOND};
 
@@ -300,6 +300,7 @@ impl StreamContract {
     pub fn pause_stream(env: Env, employer: Address, stream_id: u64) {
         employer.require_auth();
         let mut stream = require_employer_by_id(&env, &employer, stream_id);
+        assert!(stream.status != StreamStatus::Paused, "{}", ERR_ALREADY_PAUSED);
         assert_eq!(stream.status, StreamStatus::Active, "stream not active");
         let now = env.ledger().timestamp();
         stream.paused_at = now;
@@ -312,6 +313,7 @@ impl StreamContract {
     pub fn resume_stream(env: Env, employer: Address, stream_id: u64) {
         employer.require_auth();
         let mut stream = require_employer_by_id(&env, &employer, stream_id);
+        assert!(stream.status != StreamStatus::Active, "{}", ERR_NOT_PAUSED);
         assert_eq!(stream.status, StreamStatus::Paused, "stream not paused");
         let now = env.ledger().timestamp();
         // Advance last_withdraw_time by the paused duration to exclude it while
