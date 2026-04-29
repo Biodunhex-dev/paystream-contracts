@@ -3,7 +3,7 @@
 use soroban_sdk::Address;
 use crate::types::{
     ERR_ZERO_DEPOSIT, ERR_ZERO_RATE, ERR_BELOW_MIN_DEPOSIT, ERR_INVALID_RATE, ERR_SAME_PARTY,
-    ERR_DURATION_TOO_LONG, ERR_MAX_STREAMS_REACHED,
+    ERR_DURATION_TOO_LONG, ERR_MAX_STREAMS_REACHED, ERR_STOP_TIME_PAST,
 };
 
 /// Maximum allowed rate_per_second (1 billion tokens/s — prevents overflow in
@@ -41,7 +41,7 @@ pub fn validate_create_stream(
     assert!(effective_duration <= MAX_STREAM_DURATION, "{}", ERR_DURATION_TOO_LONG);
 
     if stop_time > 0 {
-        assert!(stop_time > now, "stop_time must be in the future");
+        assert!(stop_time > now, "{}", ERR_STOP_TIME_PAST);
         let stop_time_duration = stop_time.saturating_sub(now);
         assert!(stop_time_duration <= MAX_STREAM_DURATION, "{}", ERR_DURATION_TOO_LONG);
     }
