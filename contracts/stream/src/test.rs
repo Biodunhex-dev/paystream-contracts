@@ -87,6 +87,34 @@ fn test_withdraw() {
     assert!(!s.locked);
 }
 
+/// Issue #54: double withdraw at the same ledger timestamp must return 0
+/// without performing a token transfer.
+#[test]
+fn test_withdraw_zero_claimable_returns_zero() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0, &0, &0);
+
+    // Advance time so there is something to withdraw.
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    let first = client.withdraw(&employee, &id);
+    assert_eq!(first, 1000);
+
+    // Second withdraw at the same timestamp: claimable == 0, must return 0.
+    let second = client.withdraw(&employee, &id);
+    assert_eq!(second, 0);
+
+    // Stream state must be unchanged after the no-op withdraw.
+    let s = client.get_stream(&id);
+    assert_eq!(s.withdrawn, 1000);
+    assert_eq!(s.status, StreamStatus::Active);
+}
+
 #[test]
 #[should_panic(expected = "E010")]
 fn test_withdraw_before_cooldown_rejected() {
