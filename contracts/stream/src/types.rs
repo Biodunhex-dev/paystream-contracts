@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use soroban_sdk::{contracttype, Address};
 
 /// Status of a salary stream.
@@ -17,18 +19,79 @@ pub struct Stream {
     pub id: u64,
     pub employer: Address,
     pub employee: Address,
-    pub token: Address,        // SAC token contract address
-    pub deposit: i128,         // total deposited amount
-    pub withdrawn: i128,       // total already withdrawn
-    pub rate_per_second: i128, // tokens streamed per second
-    pub start_time: u64,       // ledger timestamp when stream started
-    pub stop_time: u64,        // 0 = no end, else hard stop timestamp
+    pub token: Address,
+    pub deposit: i128,
+    pub withdrawn: i128,
+    pub rate_per_second: i128,
+    pub start_time: u64,
+    pub stop_time: u64,
     pub last_withdraw_time: u64,
+    pub cooldown_period: u64,
     pub status: StreamStatus,
-    /// Timestamp when the stream was paused; 0 if not paused.
-    pub paused_at: u64,
-    /// Reentrancy guard.
     pub locked: bool,
+    /// Optional cliff: no tokens claimable before this timestamp (0 = no cliff). (#123)
+    pub cliff_time: u64,
+    /// Timestamp when the stream was last paused (0 if not paused). (#123 / pause fix)
+    pub paused_at: u64,
+}
+
+/// Record of a pause/resume event for history tracking.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct PauseEvent {
+    pub stream_id: u64,
+    pub timestamp: u64,
+    pub is_pause: bool, // true for pause, false for resume
+}
+
+/// Parameters for a single stream in a batch create call.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct StreamParams {
+    pub employee: Address,
+    pub token: Address,
+    pub deposit: i128,
+    pub rate_per_second: i128,
+    pub stop_time: u64,
+    /// Optional cliff timestamp (0 = no cliff). (#123)
+    pub cliff_time: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Governance types (#124)
+// ---------------------------------------------------------------------------
+
+/// Which protocol parameter a governance proposal targets.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum GovParam {
+    MinDeposit,
+    MaxDuration,
+    FeeBps,
+}
+
+/// State of a governance proposal.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum ProposalStatus {
+    Active,
+    Passed,
+    Executed,
+    Rejected,
+}
+
+/// An on-chain governance proposal.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Proposal {
+    pub id: u64,
+    pub param: GovParam,
+    pub new_value: u64,
+    pub votes_for: u64,
+    pub votes_against: u64,
+    pub status: ProposalStatus,
+    /// Ledger timestamp after which the proposal can be executed (timelock).
+    pub executable_after: u64,
 }
 
 /// Storage keys.
@@ -38,38 +101,41 @@ pub enum DataKey {
     StreamCount,
     Admin,
     MinDeposit,
-    /// Index: employer address → Vec<u64> of stream IDs they own.
+    AdminNonce,
+    Paused,
     EmployerStreams(Address),
-    /// Global pause flag (bool). When true, create/withdraw are blocked.
-    GlobalPaused,
-    /// Per-employer active stream count (u32).
-    EmployerStreamCount(Address),
-    /// Max active streams per employer (u32). Default: 1000.
-    EmployerStreamLimit,
-    /// Pending upgrade: (new_wasm_hash: BytesN<32>, scheduled_at: u64).
-    UpgradePending,
+    EmployeeStreams(Address),
+    PendingAdmin,
+    FeeBps,
+    FeeRecipient,
+    /// Pending employer for a two-step stream ownership transfer.
+    PendingEmployer(u64),
+    /// Maximum number of streams an employer can create.
+    MaxStreamsPerEmployer,
+    /// Pause history for a stream.
+    PauseHistory(u64),
+    // Governance (#124)
+    Proposal(u64),
+    ProposalCount,
+    Voted(u64, Address),
 }
 
-/// Contract error codes – panic messages reference these names so callers can
-/// match on a stable string.
-///
-/// | Code | Constant            | Meaning                                      |
-/// |------|---------------------|----------------------------------------------|
-/// | E001 | ERR_ZERO_RATE       | `rate_per_second` must be > 0                |
-/// | E002 | ERR_ZERO_DEPOSIT    | `deposit` must be > 0                        |
-/// | E003 | ERR_REENTRANT       | Reentrant withdraw detected                  |
-/// | E004 | ERR_OVERFLOW        | Arithmetic overflow in claimable calculation |
-/// | E005 | ERR_GLOBAL_PAUSED   | Contract is globally paused                  |
-/// | E006 | ERR_STREAM_LIMIT    | Employer has reached active stream limit      |
-/// | E007 | ERR_UPGRADE_PENDING | Upgrade already scheduled                    |
-/// | E008 | ERR_UPGRADE_LOCKED  | Upgrade timelock has not elapsed              |
-/// | E009 | ERR_NO_UPGRADE      | No upgrade is pending                        |
 pub const ERR_ZERO_RATE: &str = "E001: rate_per_second must be greater than zero";
 pub const ERR_ZERO_DEPOSIT: &str = "E002: deposit must be positive";
 pub const ERR_REENTRANT: &str = "E003: reentrant withdraw detected";
 pub const ERR_OVERFLOW: &str = "E004: arithmetic overflow in claimable calculation";
-pub const ERR_GLOBAL_PAUSED: &str = "E005: contract is globally paused";
-pub const ERR_STREAM_LIMIT: &str = "E006: StreamLimitExceeded";
-pub const ERR_UPGRADE_PENDING: &str = "E007: upgrade already scheduled";
-pub const ERR_UPGRADE_LOCKED: &str = "E008: upgrade timelock has not elapsed (48h required)";
-pub const ERR_NO_UPGRADE: &str = "E009: no upgrade is pending";
+pub const ERR_STREAM_CANCELLED: &str = "E005: cannot top up a cancelled stream";
+pub const ERR_STREAM_EXHAUSTED: &str = "E006: cannot top up an exhausted stream";
+pub const ERR_BELOW_MIN_DEPOSIT: &str = "E007: deposit below minimum";
+pub const ERR_INVALID_RATE: &str = "E008: rate_per_second exceeds maximum";
+pub const ERR_BAD_NONCE: &str = "E009: invalid admin nonce";
+pub const ERR_SAME_PARTY: &str = "E010: employer and employee must differ";
+pub const ERR_FEE_TOO_HIGH: &str = "E011: fee_bps exceeds maximum of 100";
+pub const ERR_INVALID_TOKEN: &str = "E012: token address is not a valid SEP-41 contract";
+pub const ERR_UNAUTHORIZED_TRANSFER: &str = "E013: not the pending employer for this stream";
+pub const ERR_DURATION_TOO_LONG: &str = "E014: stream duration exceeds maximum allowed";
+pub const ERR_STOP_TIME_PAST: &str = "E016: stop_time must be in the future";
+pub const ERR_MAX_STREAMS_REACHED: &str = "E015: maximum streams per employer reached";
+pub const ERR_WITHDRAW_COOLDOWN: &str = "E010: withdraw cooldown not expired";
+pub const ERR_ALREADY_PAUSED: &str = "E016: stream is already paused";
+pub const ERR_NOT_PAUSED: &str = "E017: stream is not paused";
