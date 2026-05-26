@@ -9,6 +9,7 @@ require('dotenv').config();
 
 const authMiddleware = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
+const authRoutes = require('./routes/auth');
 const streamRoutes = require('./routes/streams');
 const tokenRoutes = require('./routes/tokens');
 const adminRoutes = require('./routes/admin');
@@ -71,6 +72,12 @@ const swaggerOptions = {
           type: 'apiKey',
           in: 'header',
           name: 'X-API-Key',
+        },
+        BearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'JWT obtained from POST /auth/verify (#245)',
         },
       },
       schemas: {
@@ -142,6 +149,9 @@ app.get('/health', (req, res) => {
     version: '1.0.0',
   });
 });
+
+// Auth routes (public — no authMiddleware)
+app.use('/auth', authRoutes);
 
 // API routes
 app.use('/api/streams', authMiddleware, streamRoutes);
