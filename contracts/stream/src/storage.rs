@@ -4,6 +4,10 @@ use soroban_sdk::{Env, Address, Vec};
 use crate::types::{DataKey, PauseEvent, Proposal, ProposalStatus, Stream, StreamStatus, ERR_OVERFLOW, ERR_BAD_NONCE};
 
 pub const DEFAULT_MIN_DEPOSIT: i128 = 10_000;
+/// Default max active streams per employer.
+pub const DEFAULT_STREAM_LIMIT: u32 = 1000;
+/// Upgrade timelock: 48 hours in seconds.
+pub const UPGRADE_TIMELOCK_SECS: u64 = 48 * 60 * 60;
 
 const TTL_THRESHOLD: u32 = 6_307_200;
 const TTL_EXTEND_TO: u32 = 12_614_400;

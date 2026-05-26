@@ -155,12 +155,17 @@ impl StreamContract {
         cooldown_period: u64,
         cliff_time: u64,
     ) -> u64 {
+        assert!(!is_globally_paused(&env), "{}", ERR_GLOBAL_PAUSED);
         employer.require_auth();
         assert!(!get_paused(&env), "contract is paused");
 
         let current_count = get_employer_streams(&env, &employer).len();
         let max_limit = get_max_streams_per_employer(&env);
         validate_max_streams(current_count, max_limit);
+
+        // #283: enforce per-employer stream limit
+        let count = get_employer_stream_count(&env, &employer);
+        assert!(count < get_stream_limit(&env), "{}", ERR_STREAM_LIMIT);
 
         let now = env.ledger().timestamp();
         let min_deposit = get_min_deposit(&env);
@@ -184,6 +189,7 @@ impl StreamContract {
             last_withdraw_time: now,
             cooldown_period,
             status: StreamStatus::Active,
+            paused_at: 0,
             locked: false,
             cliff_time,
             paused_at: 0,
@@ -203,6 +209,8 @@ impl StreamContract {
         let now = env.ledger().timestamp();
         let min_deposit = get_min_deposit(&env);
         let mut ids: Vec<u64> = Vec::new(&env);
+        let limit = get_stream_limit(&env);
+        let mut count = get_employer_stream_count(&env, &employer);
 
         let current_count = get_employer_streams(&env, &employer).len();
         let max_limit = get_max_streams_per_employer(&env);
@@ -243,6 +251,7 @@ impl StreamContract {
     }
 
     pub fn withdraw(env: Env, employee: Address, stream_id: u64) -> i128 {
+        assert!(!is_globally_paused(&env), "{}", ERR_GLOBAL_PAUSED);
         employee.require_auth();
         assert!(!get_paused(&env), "contract is paused");
         let mut stream = require_employee_by_id(&env, &employee, stream_id);
