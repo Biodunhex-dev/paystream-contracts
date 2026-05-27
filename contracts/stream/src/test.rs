@@ -202,3 +202,37 @@ fn test_withdraw_cooldown() {
     let withdrawn = client.withdraw(&employee, &id);
     assert!(withdrawn > 0);
 }
+
+#[test]
+fn test_vesting_linear_schedule() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    // vest over 100 seconds
+    let now = env.ledger().timestamp();
+    let vest_end = now + 100;
+    let total = 1000;
+    let id = client.create_vesting_stream(&employer, &employee, &token_id, &total, &vest_end, &0);
+
+    // before vesting starts
+    assert_eq!(client.claimable(&id), 0);
+
+    // halfway through
+    env.ledger().with_mut(|l| l.timestamp += 50);
+    assert_eq!(client.claimable(&id), 500);
+
+    // withdraw half
+    let w = client.withdraw(&employee, &id);
+    assert_eq!(w, 500);
+
+    // advance to full vest
+    env.ledger().with_mut(|l| l.timestamp += 50);
+    assert_eq!(client.claimable(&id), 500);
+    let w2 = client.withdraw(&employee, &id);
+    assert_eq!(w2, 500);
+    assert_eq!(client.get_stream(&id).status, StreamStatus::Exhausted);
+}

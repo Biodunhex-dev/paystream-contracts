@@ -29,6 +29,27 @@ pub fn claimable_amount(stream: &Stream, now: u64) -> i128 {
     if stream.status == StreamStatus::Cancelled || stream.status == StreamStatus::Exhausted {
         return 0;
     }
+
+    // Vesting streams: linear unlock between `start_time` and `vest_end`.
+    if stream.is_vesting {
+        if stream.vest_end == 0 || stream.vest_total <= 0 {
+            return 0;
+        }
+        let unlocked = if now >= stream.vest_end {
+            stream.vest_total
+        } else if now <= stream.start_time {
+            0
+        } else {
+            // unlocked = vest_total * (now - start_time) / (vest_end - start_time)
+            let numer = (now.saturating_sub(stream.start_time)) as i128;
+            let denom = (stream.vest_end.saturating_sub(stream.start_time)) as i128;
+            (stream.vest_total * numer / denom).max(0)
+        };
+        let claimable = unlocked - stream.withdrawn;
+        return claimable.max(0);
+    }
+
+    // Streaming (per-second) behaviour (existing logic)
     let effective_end = if stream.stop_time > 0 {
         now.min(stream.stop_time)
     } else {

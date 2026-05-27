@@ -60,10 +60,56 @@ impl StreamContract {
             stop_time,
             last_withdraw_time: now,
             cooldown_period,
+            // not a vesting stream
+            is_vesting: false,
+            vest_total: 0,
+            vest_end: 0,
             status: StreamStatus::Active,
         };
         save_stream(&env, &stream);
         events::stream_created(&env, id, &employer, &employee, rate_per_second);
+        id
+    }
+
+    /// Employer creates a linear vesting stream (one-shot vesting schedule).
+    /// `vest_end` must be greater than now and `total_amount` > 0.
+    pub fn create_vesting_stream(
+        env: Env,
+        employer: Address,
+        employee: Address,
+        token_address: Address,
+        total_amount: i128,
+        vest_end: u64,
+        cooldown_period: u64,
+    ) -> u64 {
+        employer.require_auth();
+        assert!(total_amount > 0, "total_amount must be positive");
+        let now = env.ledger().timestamp();
+        assert!(vest_end > now, "vest_end must be in the future");
+
+        let token_client = token::Client::new(&env, &token_address);
+        token_client.transfer(&employer, &env.current_contract_address(), &total_amount);
+
+        let id = next_id(&env);
+        let stream = Stream {
+            id,
+            employer: employer.clone(),
+            employee: employee.clone(),
+            token: token_address,
+            deposit: total_amount,
+            withdrawn: 0,
+            rate_per_second: 0,
+            start_time: now,
+            stop_time: 0,
+            last_withdraw_time: now,
+            cooldown_period,
+            is_vesting: true,
+            vest_total: total_amount,
+            vest_end,
+            status: StreamStatus::Active,
+        };
+        save_stream(&env, &stream);
+        events::stream_created(&env, id, &employer, &employee, 0);
         id
     }
 

@@ -25,6 +25,10 @@ pub struct Stream {
     pub stop_time: u64,       // 0 = no end, else hard stop timestamp
     pub last_withdraw_time: u64,
     pub cooldown_period: u64, // seconds between withdrawals, 0 = no limit
+    // Vesting support
+    pub is_vesting: bool,
+    pub vest_total: i128,     // total amount to vest (for vesting streams)
+    pub vest_end: u64,        // vesting end timestamp (0 = not vesting)
     pub status: StreamStatus,
 }
 
